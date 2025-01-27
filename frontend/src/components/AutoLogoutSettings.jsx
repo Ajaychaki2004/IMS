@@ -2,15 +2,15 @@ import React, { useState, useEffect } from 'react'
 import { FaSave } from 'react-icons/fa'
 
 const AutoLogoutSettings = () => {
-  const [logoutTime, setLogoutTime] = useState('')
+  const [logoutTime, setLogoutTime] = useState('30') // Default 30 minutes
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
   useEffect(() => {
-    // Get saved logout time from localStorage
-    const savedTime = localStorage.getItem('autoLogoutTime')
-    if (savedTime) {
-      setLogoutTime(savedTime)
+    // Load saved timeout value
+    const savedTimeout = localStorage.getItem('autoLogoutTime')
+    if (savedTimeout) {
+      setLogoutTime(savedTimeout)
     }
   }, [])
 
@@ -19,7 +19,6 @@ const AutoLogoutSettings = () => {
     setError('')
     setSuccess('')
 
-    // Validate input
     const time = parseInt(logoutTime)
     if (!time || time < 1) {
       setError('Please enter a valid time in minutes')
@@ -27,12 +26,11 @@ const AutoLogoutSettings = () => {
     }
 
     try {
-      // Save to localStorage
       localStorage.setItem('autoLogoutTime', time.toString())
       setSuccess('Auto logout time updated successfully')
-
-      // Reset any existing timer and start new one
-      window.dispatchEvent(new CustomEvent('resetAutoLogout'))
+      
+      // Trigger reset of the auto-logout timer
+      window.dispatchEvent(new Event('resetAutoLogout'))
     } catch (err) {
       setError('Failed to save settings')
     }
@@ -43,6 +41,7 @@ const AutoLogoutSettings = () => {
       <h2>Auto Logout Settings</h2>
       <p className="settings-description">
         Set the time (in minutes) after which you will be automatically logged out due to inactivity.
+        Default is 30 minutes.
       </p>
 
       <form onSubmit={handleSubmit} className="settings-form">
@@ -59,8 +58,8 @@ const AutoLogoutSettings = () => {
           />
         </div>
 
-        {error && <div className="settings-error">{error}</div>}
-        {success && <div className="settings-success">{success}</div>}
+        {error && <div className="error-message">{error}</div>}
+        {success && <div className="success-message">{success}</div>}
 
         <button type="submit" className="save-button">
           <FaSave /> Save Settings

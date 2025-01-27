@@ -61,7 +61,7 @@ def register(request):
         # Create user data with hashed password
         user_data = request.data.copy()
         # Remove confirm_password if it exists
-        user_data.pop('confirm_password', None)
+        user_data.pop('confirmPassword', None)
         
         # Hash the password
         password_bytes = password.encode('utf-8')
@@ -79,6 +79,7 @@ def register(request):
         response_data = user_data.copy()
         response_data['_id'] = str(inserted_data.inserted_id)
         response_data.pop('password', None)  # Remove password from response
+        response_data.pop('confirmPassword', None)
         
         return Response({
             'message': 'Registration successful',

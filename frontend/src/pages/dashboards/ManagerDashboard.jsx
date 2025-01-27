@@ -1,23 +1,16 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { 
-  FaHome, FaUsers, FaBoxes, FaSignOutAlt, FaBars, 
-  FaUserPlus, FaSearch, FaEdit, FaCog 
+  FaHome, FaUsers, FaBoxes, FaSignOutAlt, FaBars, FaCog 
 } from 'react-icons/fa'
 import AutoLogoutSettings from '../../components/AutoLogoutSettings'
 import useAutoLogout from '../../hooks/useAutoLogout'
 
 const ManagerDashboard = () => {
   const navigate = useNavigate()
+  const { userId } = useParams()
   const [activeTab, setActiveTab] = useState('dashboard')
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
-  const [dashboardStats, setDashboardStats] = useState(null)
-  const [employees, setEmployees] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedUser, setSelectedUser] = useState(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
 
   // Initialize auto logout
   useAutoLogout()
@@ -29,211 +22,28 @@ const ManagerDashboard = () => {
       return
     }
 
-    fetchDashboardData()
-    const interval = setInterval(fetchDashboardData, 30000)
-    return () => clearInterval(interval)
-  }, [navigate])
-
-  useEffect(() => {
-    if (activeTab === 'employees') {
-      fetchEmployees()
-    }
-  }, [activeTab])
-
-  const fetchDashboardData = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/api/dashboard-stats/', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-      const data = await response.json()
-      if (response.ok) {
-        setDashboardStats(data)
-      } else {
-        setError(data.message)
-      }
-    } catch (err) {
-      setError('Failed to fetch dashboard data')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchEmployees = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/api/employees/', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-      const data = await response.json()
-      if (response.ok) {
-        setEmployees(data)
-      }
-    } catch (err) {
-      setError('Failed to fetch employees data')
-    }
-  }
-
-  const handleLogout = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/api/logout/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
-      })
-
-      if (response.ok) {
-        localStorage.clear()
-        navigate('/login')
-      } else {
-        console.error('Logout failed')
-      }
-    } catch (err) {
-      console.error('Logout error:', err)
-    } finally {
-      localStorage.clear()
+    const user = JSON.parse(userData)
+    if (user._id !== userId) {
       navigate('/login')
+      return
     }
+
+    if (!localStorage.getItem('autoLogoutTime')) {
+      localStorage.setItem('autoLogoutTime', '30')
+    }
+  }, [navigate, userId])
+
+  const handleLogout = () => {
+    localStorage.clear()
+    navigate('/login')
   }
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen)
   }
 
-  const handleSearch = (data) => {
-    return data.filter(item => 
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.email.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  }
-
-  const handleEdit = (user) => {
-    setSelectedUser(user)
-    setIsModalOpen(true)
-  }
-
-  const renderDashboard = () => (
-    <div className="dashboard-overview">
-      <div className="dashboard-header">
-        <h1>Manager Dashboard</h1>
-        <div className="date-filter">
-          <select defaultValue="today">
-            <option value="today">Today</option>
-            <option value="week">This Week</option>
-            <option value="month">This Month</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="dashboard-grid">
-        <div className="dashboard-card">
-          <div className="card-icon employee-icon">
-            <FaUsers />
-          </div>
-          <div className="card-content">
-            <h3>Total Employees</h3>
-            <p className="card-number">{dashboardStats?.employees_count || 0}</p>
-            <p className="card-status">Active Employees</p>
-          </div>
-        </div>
-
-        <div className="dashboard-card">
-          <div className="card-icon inventory-icon">
-            <FaBoxes />
-          </div>
-          <div className="card-content">
-            <h3>Inventory Items</h3>
-            <p className="card-number">{dashboardStats?.inventory_count || 0}</p>
-            <p className="card-status">Items in Stock</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="recent-activities">
-        <h2>Recent Activities</h2>
-        <div className="activity-list">
-          {dashboardStats?.recent_activities.map((activity, index) => (
-            <div key={index} className="activity-item">
-              <div className="activity-icon">
-                <FaUserPlus />
-              </div>
-              <div className="activity-details">
-                <p className="activity-user">{activity.user}</p>
-                <p className="activity-time">
-                  {new Date(activity.timestamp).toLocaleString()}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-
-  const renderUserTable = (users, userType) => (
-    <div className="section-content">
-      <div className="section-header">
-        <h2>{userType} Management</h2>
-        <div className="section-actions">
-          <div className="search-box">
-            <FaSearch />
-            <input
-              type="text"
-              placeholder={`Search ${userType}...`}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <button className="add-button">
-            <FaUserPlus /> Add {userType.slice(0, -1)}
-          </button>
-        </div>
-      </div>
-
-      <div className="user-table">
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Status</th>
-              <th>Joined Date</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {handleSearch(users).map(user => (
-              <tr key={user.id}>
-                <td>{user.name}</td>
-                <td>{user.email}</td>
-                <td>
-                  <span className={`status-badge ${user.status.toLowerCase()}`}>
-                    {user.status}
-                  </span>
-                </td>
-                <td>{new Date(user.joined_date).toLocaleDateString()}</td>
-                <td className="action-buttons">
-                  <button onClick={() => handleEdit(user)} className="edit-button">
-                    <FaEdit />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-
   return (
     <div className="dashboard-container">
-      {/* Sidebar */}
       <div className={`sidebar ${!isSidebarOpen ? 'closed' : ''}`}>
         <div className="sidebar-header">
           <h2>Manager Panel</h2>
@@ -285,41 +95,21 @@ const ManagerDashboard = () => {
         </button>
       </div>
 
-      {/* Main Content */}
       <div className={`dashboard-main ${isSidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="dashboard-content">
-          {loading ? (
-            <div className="loading-spinner">
-              <div className="spinner"></div>
-              <p>Loading...</p>
+          {activeTab === 'dashboard' && (
+            <div className="welcome-section">
+              <h2>Welcome to Manager Dashboard</h2>
+              <p className="welcome-message">
+                Monitor your team's performance and manage inventory efficiently.
+              </p>
             </div>
-          ) : error ? (
-            <div className="error-message">
-              <p>{error}</p>
-              <button onClick={fetchDashboardData}>Retry</button>
-            </div>
-          ) : (
-            <>
-              {activeTab === 'dashboard' && renderDashboard()}
-              {activeTab === 'employees' && renderUserTable(employees, 'Employees')}
-              {activeTab === 'inventory' && (
-                <div className="section-content">
-                  <h2>Inventory Management</h2>
-                  {/* Add inventory management component */}
-                </div>
-              )}
-              {activeTab === 'settings' && <AutoLogoutSettings />}
-            </>
           )}
+          {activeTab === 'employees' && <h2>Employees Management</h2>}
+          {activeTab === 'inventory' && <h2>Inventory Management</h2>}
+          {activeTab === 'settings' && <AutoLogoutSettings />}
         </div>
       </div>
-
-      {/* User Edit Modal */}
-      {isModalOpen && selectedUser && (
-        <div className="modal">
-          {/* Add user edit form */}
-        </div>
-      )}
     </div>
   )
 }
