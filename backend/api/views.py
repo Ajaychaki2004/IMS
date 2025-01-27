@@ -1,7 +1,7 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 import random
 import pymongo
 from django.core.mail import send_mail
@@ -12,7 +12,6 @@ from datetime import datetime, timedelta
 from django.conf import settings
 
 LOCK_DURATION_HOURS = timedelta(minutes=5)
-
 
 client = pymongo.MongoClient("mongodb+srv://HCqpxhFHemEzvcWx:HCqpxhFHemEzvcWx@cluster0.srrgh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 db = client["inventory"]
@@ -40,52 +39,52 @@ def check_password(password, hashed_password):
     return bcrypt.checkpw(password, hashed_password)
 
 @api_view(['POST'])
-def register(request):
+@permission_classes([IsAdminUser])
+def register_user(request):
     try:
         email = request.data.get('email')
         password = request.data.get('password')
-        
+        role = request.data.get('role')
+
         print("Registration attempt for email:", email)  # Debug print
-        
-        if not email or not password:
+
+        if not email or not password or not role:
             return Response({
-                'message': 'Email and password are required'
+                'message': 'Email, password, and role are required'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+
         existing_user = collection_users.find_one({"email": email})
         if existing_user:
             return Response({
                 'message': 'Email already exists'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+
         # Create user data with hashed password
         user_data = request.data.copy()
         # Remove confirm_password if it exists
         user_data.pop('confirmPassword', None)
-        
+
         # Hash the password
-        password_bytes = password.encode('utf-8')
-        salt = bcrypt.gensalt()
-        hashed_password = bcrypt.hashpw(password_bytes, salt)
-        
+        hashed_password = hash_password(password)
+
         # Store the hashed password as string
-        user_data['password'] = hashed_password.decode('utf-8')
+        user_data['password'] = hashed_password
+        user_data['role'] = role.lower()
         print("Hashed password for registration:", user_data['password'])  # Debug print
-        
+
         # Insert the user
         inserted_data = collection_users.insert_one(user_data)
-        
+
         # Prepare response data
         response_data = user_data.copy()
         response_data['_id'] = str(inserted_data.inserted_id)
         response_data.pop('password', None)  # Remove password from response
-        response_data.pop('confirmPassword', None)
-        
+
         return Response({
             'message': 'Registration successful',
             'data': response_data
         }, status=status.HTTP_201_CREATED)
-        
+
     except Exception as e:
         print(f"Registration error: {str(e)}")  # For debugging
         return Response({
@@ -96,12 +95,12 @@ def register(request):
 def verify_email_via_otp(request):
     email = request.data["email"]
     otp = ''.join([str(random.randint(0, 9)) for _ in range(6)])
-    
+
     subject = 'Email Verification OTP for Inventory Management System'
     message = f'Your OTP for email verification is: {otp}'
     from_email = 'naveenkumar.intern@gmail.com'
     recipient_list = [email]
-    
+
     try:
         send_mail(subject, message, from_email, recipient_list)
         collection_otp.update_one(
@@ -112,14 +111,13 @@ def verify_email_via_otp(request):
         return Response({'message':'OTP sent successfully'}, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({'message':'Failed to send OTP'}, status=status.HTTP_400_BAD_REQUEST)
-    
 
 @api_view(['POST'])
 def verify_otp(request):
     email = request.data["email"]
     otp = request.data["otp"]
     user = collection_otp.find_one({"email": email})
-    
+
     if user and user["otp"] == otp:
         return Response({'message':'OTP verified successfully'}, status=status.HTTP_200_OK)
     else:
@@ -130,14 +128,14 @@ def login(request):
     try:
         email = request.data.get('email')
         password = request.data.get('password')
-        
+
         if not email or not password:
             return Response({
                 'message': 'Email and password are required'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+
         user = collection_users.find_one({'email': email})
-        
+
         if not user:
             return Response({
                 'message': 'Invalid credentials'
@@ -159,7 +157,7 @@ def login(request):
 
         stored_password = user.get('password', '').encode('utf-8')
         input_password = password.encode('utf-8')
-        
+
         if bcrypt.checkpw(input_password, stored_password):
             # Reset login attempts on successful login
             collection_users.update_one(
@@ -195,7 +193,7 @@ def login(request):
                 samesite='Lax',
                 secure=False  # Set to True in production with HTTPS
             )
-            
+
             return response
         else:
             # Increment login attempts
@@ -221,7 +219,7 @@ def login(request):
             return Response({
                 'message': message
             }, status=status.HTTP_401_UNAUTHORIZED)
-            
+
     except Exception as e:
         print(f"Login error: {str(e)}")
         return Response({
@@ -234,10 +232,10 @@ def logout(request):
         response = Response({
             'message': 'Logout successful'
         }, status=status.HTTP_200_OK)
-        
+
         # Delete the JWT cookie
         response.delete_cookie('jwt_token')
-        
+
         return response
     except Exception as e:
         print(f"Logout error: {str(e)}")
@@ -250,16 +248,16 @@ def forgot_password(request):
     email = request.data.get('email')
     if not email:
         return Response({'message': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
+
     user = collection_users.find_one({'email': email})
     if user:
         otp = ''.join([str(random.randint(0, 9)) for _ in range(6)])
-        
+
         subject = 'Password Reset OTP for Inventory Management System'
         message = f'Your OTP for password reset is: {otp}'
         from_email = 'naveenkumar.intern@gmail.com'
         recipient_list = [email]
-        
+
         try:
             send_mail(subject, message, from_email, recipient_list)
             collection_otp.update_one(
@@ -272,7 +270,7 @@ def forgot_password(request):
             return Response({'message':'Failed to send OTP'}, status=status.HTTP_400_BAD_REQUEST)
     else:
         return Response({'message': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-    
+
 @api_view(['POST'])
 def reset_password(request):
     email = request.data.get('email')
@@ -285,7 +283,7 @@ def reset_password(request):
             # Hash the new password before storing
             hashed_password = hash_password(new_password)
             collection_users.update_one(
-                {'email': email}, 
+                {'email': email},
                 {'$set': {'password': hashed_password}}
             )
             return Response({
@@ -313,7 +311,7 @@ def dashboard_stats(request, user_id):
         managers_count = collection_users.count_documents({'role': 'manager'})
         employees_count = collection_users.count_documents({'role': 'employee'})
         inventory_count = collection_inventory.count_documents({})
-        
+
         # Get recent activities (last 5 users)
         recent_users = list(collection_users.find({}, {'name': 1, 'date_joined': 1}).sort('date_joined', -1).limit(5))
         recent_activities = []
@@ -324,10 +322,10 @@ def dashboard_stats(request, user_id):
                     'user': user['name'],
                     'timestamp': user['date_joined']
                 })
-        
+
         return Response({
             'managers_count': managers_count,
-            'employees_count': employees_count, 
+            'employees_count': employees_count,
             'inventory_count': inventory_count,
             'recent_activities': recent_activities
         }, status=status.HTTP_200_OK)
@@ -343,12 +341,12 @@ def get_managers(request):
     try:
         managers = list(collection_users.find({'role': 'manager'}, {
             '_id': 1,
-            'name': 1, 
+            'name': 1,
             'email': 1,
             'date_joined': 1,
             'is_active': 1
         }))
-        
+
         manager_data = [{
             'id': str(manager['_id']),
             'name': manager.get('name', ''),
@@ -356,7 +354,7 @@ def get_managers(request):
             'status': 'Active' if manager.get('is_active', True) else 'Inactive',
             'joined_date': manager.get('date_joined')
         } for manager in managers]
-        
+
         return Response(manager_data, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({
@@ -371,11 +369,11 @@ def get_employees(request):
         employees = list(collection_users.find({'role': 'employee'}, {
             '_id': 1,
             'name': 1,
-            'email': 1, 
+            'email': 1,
             'date_joined': 1,
             'is_active': 1
         }))
-        
+
         employee_data = [{
             'id': str(employee['_id']),
             'name': employee.get('name', ''),
@@ -383,7 +381,7 @@ def get_employees(request):
             'status': 'Active' if employee.get('is_active', True) else 'Inactive',
             'joined_date': employee.get('date_joined')
         } for employee in employees]
-        
+
         return Response(employee_data, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({
@@ -396,17 +394,17 @@ def update_session_settings(request):
     try:
         warning_time = request.data.get('warningTime')
         logout_time = request.data.get('logoutTime')
-        
+
         if not warning_time or not logout_time:
             return Response({
                 'message': 'Warning time and logout time are required'
             }, status=status.HTTP_400_BAD_REQUEST)
-            
+
         if warning_time >= logout_time:
             return Response({
                 'message': 'Warning time must be less than logout time'
             }, status=status.HTTP_400_BAD_REQUEST)
-            
+
         # Store settings in database or cache if needed
         # For now, we'll just return success
         return Response({
@@ -416,10 +414,8 @@ def update_session_settings(request):
                 'logoutTime': logout_time
             }
         }, status=status.HTTP_200_OK)
-        
+
     except Exception as e:
         return Response({
             'message': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
