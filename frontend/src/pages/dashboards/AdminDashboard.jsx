@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { 
-  FaHome, FaUsers, FaUserTie, FaBoxes, FaSignOutAlt, FaBars, 
-  FaUserPlus, FaSearch, FaEdit, FaTrash, FaCog 
+  FaHome, FaUsers, FaUserTie, FaBoxes, FaSignOutAlt, FaBars, FaCog, FaUserPlus 
 } from 'react-icons/fa'
 import AutoLogoutSettings from '../../components/AutoLogoutSettings'
 import useAutoLogout from '../../hooks/useAutoLogout'
@@ -33,103 +32,19 @@ const AdminDashboard = () => {
     }
 
     const user = JSON.parse(userData)
-    // Verify that the logged-in user matches the URL parameter
     if (user._id !== userId) {
       navigate('/login')
       return
     }
 
-    fetchDashboardData()
-    const interval = setInterval(fetchDashboardData, 30000)
-    return () => clearInterval(interval)
+    if (!localStorage.getItem('autoLogoutTime')) {
+      localStorage.setItem('autoLogoutTime', '30')
+    }
   }, [navigate, userId])
 
-  useEffect(() => {
-    if (activeTab === 'managers') {
-      fetchManagers()
-    } else if (activeTab === 'employees') {
-      fetchEmployees()
-    }
-  }, [activeTab])
-
-  const fetchDashboardData = async () => {
-    try {
-      const response = await fetch(`http://localhost:8000/api/dashboard-stats/${userId}/`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
-      })
-      const data = await response.json()
-      if (response.ok) {
-        setDashboardStats(data)
-      } else {
-        setError(data.message)
-      }
-    } catch (err) {
-      setError('Failed to fetch dashboard data')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchManagers = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/api/managers/', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-      const data = await response.json()
-      if (response.ok) {
-        setManagers(data)
-      }
-    } catch (err) {
-      setError('Failed to fetch managers data')
-    }
-  }
-
-  const fetchEmployees = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/api/employees/', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-      const data = await response.json()
-      if (response.ok) {
-        setEmployees(data)
-      }
-    } catch (err) {
-      setError('Failed to fetch employees data')
-    }
-  }
-
-  const handleLogout = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/api/logout/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
-      })
-
-      if (response.ok) {
-        localStorage.clear()
-        navigate('/login')
-      } else {
-        console.error('Logout failed')
-      }
-    } catch (err) {
-      console.error('Logout error:', err)
-    } finally {
-      localStorage.clear()
-      navigate('/login')
-    }
+  const handleLogout = () => {
+    localStorage.clear()
+    navigate('/login')
   }
 
   const toggleSidebar = () => {
@@ -345,7 +260,6 @@ const AdminDashboard = () => {
 
   return (
     <div className="dashboard-container">
-      {/* Sidebar */}
       <div className={`sidebar ${!isSidebarOpen ? 'closed' : ''}`}>
         <div className="sidebar-header">
           <h2>Admin Panel</h2>
@@ -422,7 +336,6 @@ const AdminDashboard = () => {
         </button>
       </div>
 
-      {/* Main Content */}
       <div className={`dashboard-main ${isSidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="dashboard-content">
           {loading ? (
@@ -452,13 +365,6 @@ const AdminDashboard = () => {
           )}
         </div>
       </div>
-
-      {/* User Edit Modal */}
-      {isModalOpen && selectedUser && (
-        <div className="modal">
-          {/* Add user edit form */}
-        </div>
-      )}
     </div>
   )
 }
