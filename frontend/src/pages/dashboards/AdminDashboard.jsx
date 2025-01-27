@@ -20,6 +20,7 @@ const AdminDashboard = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedUser, setSelectedUser] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [formType, setFormType] = useState('') // New state for form type
 
   // Initialize auto logout
   useAutoLogout()
@@ -166,6 +167,55 @@ const AdminDashboard = () => {
     }
   }
 
+  const handleFormSubmit = async (e) => {
+    e.preventDefault()
+    const formData = new FormData(e.target)
+    const data = Object.fromEntries(formData.entries())
+
+    try {
+      const response = await fetch('http://localhost:8000/api/register/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      })
+
+      if (response.ok) {
+        alert('User registered successfully')
+        setFormType('') // Reset form type
+      } else {
+        const errorData = await response.json()
+        alert(`Registration failed: ${errorData.message}`)
+      }
+    } catch (err) {
+      console.error('Registration error:', err)
+      alert('Registration error')
+    }
+  }
+
+  const renderRegistrationForm = () => (
+    <div className="registration-form">
+      <h2>{formType === 'manager' ? 'Register Manager' : 'Register Staff'}</h2>
+      <form onSubmit={handleFormSubmit}>
+        <div className="form-group">
+          <label htmlFor="name">Name</label>
+          <input type="text" id="name" name="name" required />
+        </div>
+        <div className="form-group">
+          <label htmlFor="email">Email</label>
+          <input type="email" id="email" name="email" required />
+        </div>
+        <div className="form-group">
+          <label htmlFor="password">Password</label>
+          <input type="password" id="password" name="password" required />
+        </div>
+        <input type="hidden" name="role" value={formType} />
+        <button type="submit" className="submit-button">Register</button>
+      </form>
+    </div>
+  )
+
   const renderDashboard = () => (
     <div className="dashboard-overview">
       <div className="dashboard-header">
@@ -249,7 +299,7 @@ const AdminDashboard = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <button className="add-button">
+          <button className="add-button" onClick={() => setFormType(userType.toLowerCase())}>
             <FaUserPlus /> Add {userType.slice(0, -1)}
           </button>
         </div>
@@ -344,6 +394,23 @@ const AdminDashboard = () => {
           >
             <FaCog /> <span>Settings</span>
           </button>
+
+          <div className="sidebar-registration">
+            <button 
+              className={`sidebar-link ${formType === 'manager' ? 'active' : ''}`}
+              onClick={() => setFormType('manager')}
+              title="Register Manager"
+            >
+              <FaUserPlus /> <span>Register Manager</span>
+            </button>
+            <button 
+              className={`sidebar-link ${formType === 'staff' ? 'active' : ''}`}
+              onClick={() => setFormType('staff')}
+              title="Register Staff"
+            >
+              <FaUserPlus /> <span>Register Staff</span>
+            </button>
+          </div>
         </nav>
 
         <button 
@@ -380,6 +447,7 @@ const AdminDashboard = () => {
                 </div>
               )}
               {activeTab === 'settings' && <AutoLogoutSettings />}
+              {formType && renderRegistrationForm()}
             </>
           )}
         </div>
@@ -395,4 +463,4 @@ const AdminDashboard = () => {
   )
 }
 
-export default AdminDashboard 
+export default AdminDashboard
