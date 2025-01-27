@@ -78,9 +78,28 @@ const EmployeeDashboard = () => {
     }
   }
 
-  const handleLogout = () => {
-    localStorage.clear()
-    navigate('/login')
+  const handleLogout = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/logout/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        localStorage.clear()
+        navigate('/login')
+      } else {
+        console.error('Logout failed')
+      }
+    } catch (err) {
+      console.error('Logout error:', err)
+    } finally {
+      localStorage.clear()
+      navigate('/login')
+    }
   }
 
   const toggleSidebar = () => {

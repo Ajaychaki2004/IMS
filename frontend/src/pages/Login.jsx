@@ -22,33 +22,46 @@ const Login = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        credentials: 'include'  // Important for cookies
       })
 
       const result = await response.json()
 
       if (response.ok) {
-        // Store user data
-        localStorage.setItem('userData', JSON.stringify(result.data))
+        const userData = {
+          ...result.data,
+          token: response.headers.get('Authorization')
+        }
+        localStorage.setItem('userData', JSON.stringify(userData))
         
-        // Navigate based on role
         const role = result.data.role?.toLowerCase()
+        const userId = result.data._id
+
+        // Navigate with user ID
         switch(role) {
           case 'admin':
-            navigate('/admin-dashboard')
+            navigate(`/admin-dashboard/${userId}`)
             break
           case 'manager':
-            navigate('/manager-dashboard')
+            navigate(`/manager-dashboard/${userId}`)
             break
           case 'employee':
-            navigate('/employee-dashboard')
+            navigate(`/employee-dashboard/${userId}`)
             break
           default:
             setError('Invalid user role')
             localStorage.clear()
         }
       } else {
+        // Display the specific error message from backend
         setError(result.message || 'Login failed')
+        
+        // Clear password field on error
+        setData(prev => ({
+          ...prev,
+          password: ''
+        }))
       }
     } catch (err) {
       console.error('Login error:', err)
@@ -62,11 +75,11 @@ const Login = () => {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <h1 className="auth-title">Welcome Back</h1>
-          <p className="auth-subtitle">Please Login to continue</p>
+          <h1 className="auth-title">Login</h1>
+          <p className="auth-subtitle">Welcome back!</p>
         </div>
-        
-        <form className="auth-form" onSubmit={handleLogin}>
+
+        <form onSubmit={handleLogin} className="auth-form">
           <div className="input-group">
             <input
               type="email"
@@ -97,7 +110,17 @@ const Login = () => {
             </button>
           </div>
 
-          {error && <p className="error-message">{error}</p>}
+          {error && (
+            <div className="error-message" style={{
+              padding: '10px',
+              borderRadius: '4px',
+              backgroundColor: 'rgba(255, 0, 0, 0.1)',
+              border: '1px solid rgba(255, 0, 0, 0.2)',
+              marginBottom: '15px'
+            }}>
+              {error}
+            </div>
+          )}
 
           <button 
             type="submit" 

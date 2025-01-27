@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { 
   FaHome, FaUsers, FaUserTie, FaBoxes, FaSignOutAlt, FaBars, 
   FaUserPlus, FaSearch, FaEdit, FaTrash, FaCog 
@@ -9,6 +9,7 @@ import useAutoLogout from '../../hooks/useAutoLogout'
 
 const AdminDashboard = () => {
   const navigate = useNavigate()
+  const { userId } = useParams()
   const [activeTab, setActiveTab] = useState('dashboard')
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [dashboardStats, setDashboardStats] = useState(null)
@@ -30,10 +31,17 @@ const AdminDashboard = () => {
       return
     }
 
+    const user = JSON.parse(userData)
+    // Verify that the logged-in user matches the URL parameter
+    if (user._id !== userId) {
+      navigate('/login')
+      return
+    }
+
     fetchDashboardData()
     const interval = setInterval(fetchDashboardData, 30000)
     return () => clearInterval(interval)
-  }, [navigate])
+  }, [navigate, userId])
 
   useEffect(() => {
     if (activeTab === 'managers') {
@@ -45,11 +53,12 @@ const AdminDashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/dashboard-stats/', {
+      const response = await fetch(`http://localhost:8000/api/dashboard-stats/${userId}/`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        credentials: 'include'
       })
       const data = await response.json()
       if (response.ok) {
@@ -98,9 +107,28 @@ const AdminDashboard = () => {
     }
   }
 
-  const handleLogout = () => {
-    localStorage.clear()
-    navigate('/login')
+  const handleLogout = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/logout/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        localStorage.clear()
+        navigate('/login')
+      } else {
+        console.error('Logout failed')
+      }
+    } catch (err) {
+      console.error('Logout error:', err)
+    } finally {
+      localStorage.clear()
+      navigate('/login')
+    }
   }
 
   const toggleSidebar = () => {

@@ -58,9 +58,9 @@ const App = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forget-password" element={<ForgetPassword />} />
-        <Route path="/admin-dashboard" element={<AdminDashboard />} />
-        <Route path="/manager-dashboard" element={<ManagerDashboard />} />
-        <Route path="/employee-dashboard" element={<EmployeeDashboard />} />
+        <Route path="/admin-dashboard/:userId" element={<AdminDashboard />} />
+        <Route path="/manager-dashboard/:userId" element={<ManagerDashboard />} />
+        <Route path="/employee-dashboard/:userId" element={<EmployeeDashboard />} />
       </Routes>
     </Router>
   )

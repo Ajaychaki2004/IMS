@@ -7,6 +7,11 @@ import pymongo
 from django.core.mail import send_mail
 from bson import ObjectId
 import bcrypt
+import jwt
+from datetime import datetime, timedelta
+from django.conf import settings
+
+LOCK_DURATION_HOURS = timedelta(minutes=5)
 
 
 client = pymongo.MongoClient("mongodb+srv://HCqpxhFHemEzvcWx:HCqpxhFHemEzvcWx@cluster0.srrgh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
@@ -14,6 +19,9 @@ db = client["inventory"]
 collection_users = db["users"]
 collection_otp = db["otp"]
 collection_inventory = db["inventory"]
+
+# Add a dictionary to track login attempts
+login_attempts = {}
 
 def hash_password(password):
     # Convert the password to bytes
@@ -134,32 +142,106 @@ def login(request):
                 'message': 'Invalid credentials'
             }, status=status.HTTP_401_UNAUTHORIZED)
 
+        # Check if account is locked
+        if user.get('is_locked', False):
+            lock_time = user.get('locked_until')
+            if lock_time and datetime.now() < datetime.fromisoformat(lock_time):
+                return Response({
+                    'message': 'Account is locked. Please try again later.'
+                }, status=status.HTTP_401_UNAUTHORIZED)
+            else:
+                # Reset lock if lock time has passed
+                collection_users.update_one(
+                    {'_id': user['_id']},
+                    {'$set': {'is_locked': False, 'login_attempts': 0}}
+                )
+
         stored_password = user.get('password', '').encode('utf-8')
         input_password = password.encode('utf-8')
         
         if bcrypt.checkpw(input_password, stored_password):
-            user['_id'] = str(user['_id'])
-            user.pop('password', None)
-            
-            return Response({
+            # Reset login attempts on successful login
+            collection_users.update_one(
+                {'_id': user['_id']},
+                {'$set': {'login_attempts': 0}}
+            )
+
+            # Generate JWT token
+            token = jwt.encode({
+                'user_id': str(user['_id']),
+                'email': user['email'],
+                'role': user.get('role', 'employee'),
+                'exp': datetime.utcnow() + timedelta(days=1)
+            }, settings.SECRET_KEY, algorithm='HS256')
+
+            response = Response({
                 'message': 'Login successful',
                 'data': {
-                    '_id': user['_id'],
+                    '_id': str(user['_id']),
                     'email': user['email'],
                     'role': user.get('role', 'employee').lower(),
                     'name': user.get('name', ''),
                     'is_active': user.get('is_active', True)
                 }
             }, status=status.HTTP_200_OK)
+
+            # Set JWT token in cookie
+            response.set_cookie(
+                'jwt_token',
+                token,
+                max_age=24 * 60 * 60,  # 1 day
+                httponly=True,
+                samesite='Lax',
+                secure=False  # Set to True in production with HTTPS
+            )
+            
+            return response
         else:
+            # Increment login attempts
+            attempts = user.get('login_attempts', 0) + 1
+            update_data = {'login_attempts': attempts}
+
+            # Lock account if 5 failed attempts
+            if attempts >= 5:
+                locked_until = datetime.now() + LOCK_DURATION_HOURS
+                update_data.update({
+                    'is_locked': True,
+                    'locked_until': locked_until.isoformat()
+                })
+                message = 'Account locked due to too many failed attempts'
+            else:
+                message = f'Invalid credentials. {5 - attempts} attempts remaining'
+
+            collection_users.update_one(
+                {'_id': user['_id']},
+                {'$set': update_data}
+            )
+
             return Response({
-                'message': 'Invalid credentials'
+                'message': message
             }, status=status.HTTP_401_UNAUTHORIZED)
             
     except Exception as e:
         print(f"Login error: {str(e)}")
         return Response({
             'message': 'An error occurred during login'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+def logout(request):
+    try:
+        response = Response({
+            'message': 'Logout successful'
+        }, status=status.HTTP_200_OK)
+        
+        # Delete the JWT cookie
+        response.delete_cookie('jwt_token')
+        
+        return response
+    except Exception as e:
+        print(f"Logout error: {str(e)}")
+        return Response({
+            'message': 'An error occurred during logout'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
@@ -218,9 +300,14 @@ def reset_password(request):
         }, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def dashboard_stats(request):
+def dashboard_stats(request, user_id):
     try:
+        # Verify that the requesting user matches the user_id
+        if str(request.user['user_id']) != user_id:
+            return Response({
+                'message': 'Unauthorized access'
+            }, status=status.HTTP_403_FORBIDDEN)
+
         # Get counts from MongoDB collections
         managers_count = collection_users.count_documents({'role': 'manager'})
         employees_count = collection_users.count_documents({'role': 'employee'})
@@ -244,8 +331,9 @@ def dashboard_stats(request):
             'recent_activities': recent_activities
         }, status=status.HTTP_200_OK)
     except Exception as e:
+        print(f"Dashboard stats error: {str(e)}")
         return Response({
-            'error': str(e)
+            'message': 'An error occurred while fetching dashboard stats'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
