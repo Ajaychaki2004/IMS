@@ -82,6 +82,7 @@ const useAutoLogout = () => {
         z-index: 1000;
       }
       .warning-content {
+        col
         display: flex;
         flex-direction: column;
         gap: 10px;

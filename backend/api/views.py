@@ -10,6 +10,8 @@ import bcrypt
 import jwt
 from datetime import datetime, timedelta
 from django.conf import settings
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from django.contrib.auth.models import AnonymousUser
 
 LOCK_DURATION_HOURS = timedelta(minutes=5)
 
@@ -19,6 +21,7 @@ db = client["inventory"]
 collection_users = db["users"]
 collection_otp = db["otp"]
 collection_inventory = db["inventory"]
+collection_warehouse = db["warehouse"]
 
 # Add a dictionary to track login attempts
 login_attempts = {}
@@ -80,7 +83,7 @@ def register(request):
         response_data['_id'] = str(inserted_data.inserted_id)
         response_data.pop('password', None)  # Remove password from response
         response_data.pop('confirmPassword', None)
-        
+
         return Response({
             'message': 'Registration successful',
             'data': response_data
@@ -172,6 +175,7 @@ def login(request):
                 'user_id': str(user['_id']),
                 'email': user['email'],
                 'role': user.get('role', 'employee'),
+                'is_active': user.get('is_active', True),
                 'exp': datetime.utcnow() + timedelta(days=1)
             }, settings.SECRET_KEY, algorithm='HS256')
 
@@ -421,5 +425,58 @@ def update_session_settings(request):
         return Response({
             'message': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# @api_view(['POST'])
+# def create_warehouse(request):
+#     try:
+#         # Check if user is logged in via cookie
+#         user_data = request.COOKIES.get('userData')
+#         if not user_data:
+#             return Response({
+#                 'message': 'Authentication required'
+#             }, status=status.HTTP_401_UNAUTHORIZED)
+
+#         data = request.data
+#         print(data)
+#         warehouse_data = {
+#             'name': data['name'],
+#             'location': data['location'],
+#             'managers': data['managers'],
+#             'staff': data['staff'],
+#             'created_at': datetime.now().isoformat(),
+#             'is_active': True
+#         }
+        
+#         # Insert into database
+#         result = collection_warehouse.insert_one(warehouse_data)
+        
+#         return Response({
+#             'message': 'Warehouse created successfully',
+#             'data': {
+#                 '_id': str(result.inserted_id),
+#                 **warehouse_data
+#             }
+#         }, status=status.HTTP_201_CREATED)
+        
+#     except Exception as e:
+#         print(f"Error creating warehouse: {str(e)}")
+#         return Response({
+#             'message': 'An error occurred while creating the warehouse'
+#         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+def get_warehouse(request):
+    data = request.data
+    print(data)
+    return Response({'message': 'Warehouse created successfully'}, status=status.HTTP_201_CREATED)
+
+@api_view(['POST'])
+def create_warehouse(request):
+    data = request.data
+    print(data)
+    return Response({'message': 'Warehouse created successfully'}, status=status.HTTP_201_CREATED)
+
+
+
 
 

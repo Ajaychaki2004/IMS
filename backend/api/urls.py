@@ -13,4 +13,6 @@ urlpatterns = [
     path('employees/<str:user_id>/', views.get_employees, name='get_employees'),
     path('update-session-settings/', views.update_session_settings, name='update_session_settings'),
     path('logout/', views.logout, name='logout'),
+    path('warehouses/', views.create_warehouse, name='create_warehouse'),
+    path('get-warehouses/', views.get_warehouse, name='get_warehouse'),
 ]

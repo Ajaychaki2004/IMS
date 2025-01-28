@@ -3,7 +3,7 @@ import jwt
 from django.conf import settings
 from rest_framework import status
 
-class JWTAuthMiddleware:
+class AuthenticationMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
@@ -15,24 +15,26 @@ class JWTAuthMiddleware:
             '/api/forgot-password/',
             '/api/verify-email-via-otp/',
             '/api/verify-otp/',
-            '/api/reset-password/'
+            '/api/reset-password/',
         ]
 
-        # Skip authentication for public paths
-        if request.path in public_paths:
+        # Check if the path starts with any of the public paths
+        if any(request.path.startswith(path) for path in public_paths):
             return self.get_response(request)
 
+        # Check for authentication token in cookies
         try:
-            token = request.COOKIES.get('jwt_token')
-            if not token:
+            jwt_token = request.COOKIES.get('jwt_token')
+            if not jwt_token:
                 return JsonResponse(
                     {'message': 'Authentication required'}, 
                     status=status.HTTP_401_UNAUTHORIZED
                 )
 
             # Verify token
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+            payload = jwt.decode(jwt_token, settings.SECRET_KEY, algorithms=['HS256'])
             request.user = payload
+            return self.get_response(request)
 
         except jwt.ExpiredSignatureError:
             return JsonResponse(
@@ -44,5 +46,9 @@ class JWTAuthMiddleware:
                 {'message': 'Invalid token'}, 
                 status=status.HTTP_401_UNAUTHORIZED
             )
-
-        return self.get_response(request) 
+        except Exception as e:
+            print(f"Authentication error: {str(e)}")
+            return JsonResponse(
+                {'message': 'Authentication error'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            ) 
